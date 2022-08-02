@@ -54,8 +54,7 @@ def cel_compile(text: str) -> celpy.Runner:
     }
     env = celpy.Environment(annotations=decls)
     ast = env.compile(text)
-    prgm = env.program(ast)
-    return prgm
+    return env.program(ast)
 
 
 def run_cel_resource(cel: str, now: str, resource_iter: Iterable[Any]) -> None:
@@ -89,8 +88,7 @@ def get_options(argv: List[str] = sys.argv[1:]) -> argparse.Namespace:
     )
     parser.add_argument("-v", action="count", default=0)
     parser.add_argument("resources", nargs="*", type=argparse.FileType("r"))
-    options = parser.parse_args(argv)
-    return options
+    return parser.parse_args(argv)
 
 
 def main() -> None:
@@ -104,7 +102,7 @@ def main() -> None:
         for input_file in options.resources:
             if input_file is sys.stdin:
                 doc_iter: Iterable[Any]
-                logger.debug(f"Reading stdin")
+                logger.debug("Reading stdin")
                 if options.format in {".ndjson", ".jsonnl"}:
                     doc_iter = (json.loads(line) for line in sys.stdin)
                 elif options.format == "json":

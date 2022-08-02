@@ -119,12 +119,13 @@ def mock_evaluator(monkeypatch):
 
 @fixture
 def mock_environment(monkeypatch):
-    environment = Mock(
+    return Mock(
         activation=Mock(
-            return_value=Mock(nested_activation=Mock(return_value=sentinel.Activation))
+            return_value=Mock(
+                nested_activation=Mock(return_value=sentinel.Activation)
+            )
         )
     )
-    return environment
 
 
 def test_interp_runner(mock_evaluator, mock_environment):
@@ -200,7 +201,7 @@ def test_environment(mock_parser, mock_runner, mock_activation):
     expected = {
         sentinel.variable: celtypes.UintType,
     }
-    expected.update(celpy.googleapis)
+    expected |= celpy.googleapis
     assert mock_activation.mock_calls == [
         call(
             annotations=expected,

@@ -21,22 +21,17 @@ def before_scenario(context, scenario):
     that reads from data provided here.
     """
     # context.data used by the CEL conformance test suite converted from textproto.
-    context.data = {}
-    context.data['disable_check'] = False
-    context.data['type_env'] = {}   # name: type association
-    context.data['bindings'] = {}   # name: value association
-    context.data['container'] = ""  # If set, can associate a type binding from local proto files.
-    context.data['json'] = []
+    context.data = {
+        'disable_check': False,
+        'type_env': {},
+        'bindings': {},
+        'container': "",
+        'json': [],
+    }
 
     # context.cel used by the integration test suite.
-    context.cel = {}
+    context.cel = {'activation': {"resource": None, "now": None}}
 
-    # Variables to be provided to CEL
-    context.cel['activation'] = {
-        "resource": None,
-        "now": None,
-        # "C7N": None,  A namespace with the current filter.
-    }
     context.cel['filter'] = Mock(name="mock filter", manager=Mock(config=Mock()))
 
     # A mapping from URL to text usined by :py:func:`mock_text_from`.

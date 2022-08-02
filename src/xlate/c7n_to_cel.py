@@ -104,29 +104,29 @@ class C7N_Rewriter:
         This is risky, since a list with no dictionaty that has a Key value of ``name``
         will break this expression.
         """
-        function_map = {
-            "length": "size",
-        }
         function_arg_pat = re.compile(r"(\w+)\((\w+)\)")
 
         key_context = context or C7N_Rewriter.resource
         key: str
-        function_arg_match = function_arg_pat.match(operation_key)
-        if function_arg_match:
+        if function_arg_match := function_arg_pat.match(operation_key):
             function, arg = function_arg_match.groups()
+            function_map = {
+                "length": "size",
+            }
             cel_name = function_map[function]
-            key = f'{cel_name}({key_context}[{C7N_Rewriter.q(arg)}])'
+            return f'{cel_name}({key_context}[{C7N_Rewriter.q(arg)}])'
         elif "." in operation_key:
             names = operation_key.split(".")
-            key = f'{key_context}[{C7N_Rewriter.q(names[0])}]' + "".join(
+            return f'{key_context}[{C7N_Rewriter.q(names[0])}]' + "".join(
                 f'[{C7N_Rewriter.q(n)}]' for n in names[1:]
             )
+
         elif operation_key.startswith("tag:"):
             prefix, _, name = operation_key.partition(":")
-            key = f'{key_context}["Tags"].filter(x, x["Key"] == {C7N_Rewriter.q(name)})[0]["Value"]'
+            return f'{key_context}["Tags"].filter(x, x["Key"] == {C7N_Rewriter.q(name)})[0]["Value"]'
+
         else:
-            key = f'{key_context}[{C7N_Rewriter.q(operation_key)}]'
-        return key
+            return f'{key_context}[{C7N_Rewriter.q(operation_key)}]'
 
     # Transformations from C7N ``op:`` to CEL.
     atomic_op_map = {
@@ -182,47 +182,39 @@ class C7N_Rewriter:
         """
         type_value_map: Dict[str, Callable[[str, str], Tuple[str, str]]] = {
             "age": lambda sentinel, value: (
-                "timestamp({})".format(value),
-                "{} - duration({})".format(
-                    C7N_Rewriter.now, C7N_Rewriter.age_to_duration(sentinel)
-                ),
+                f"timestamp({value})",
+                f"{C7N_Rewriter.now} - duration({C7N_Rewriter.age_to_duration(sentinel)})",
             ),
-            "integer": lambda sentinel, value: (sentinel, "int({})".format(value)),
+            "integer": lambda sentinel, value: (sentinel, f"int({value})"),
             "expiration": lambda sentinel, value: (
-                "{} + duration({})".format(
-                    C7N_Rewriter.now, C7N_Rewriter.age_to_duration(sentinel)
-                ),
-                "timestamp({})".format(value),
+                f"{C7N_Rewriter.now} + duration({C7N_Rewriter.age_to_duration(sentinel)})",
+                f"timestamp({value})",
             ),
-            "normalize": lambda sentinel, value: (
-                sentinel,
-                "normalize({})".format(value),
-            ),
-            "size": lambda sentinel, value: (sentinel, "size({})".format(value)),
+            "normalize": lambda sentinel, value: (sentinel, f"normalize({value})"),
+            "size": lambda sentinel, value: (sentinel, f"size({value})"),
             "cidr": lambda sentinel, value: (
-                "parse_cidr({})".format(sentinel),
-                "parse_cidr({})".format(value),
+                f"parse_cidr({sentinel})",
+                f"parse_cidr({value})",
             ),
             "cidr_size": lambda sentinel, value: (
                 sentinel,
-                "size_parse_cidr({})".format(value),
+                f"size_parse_cidr({value})",
             ),
             "swap": lambda sentinel, value: (value, sentinel),
             "unique_size": lambda sentinel, value: (
                 sentinel,
-                "unique_size({})".format(value),
+                f"unique_size({value})",
             ),
             "date": lambda sentinel, value: (
-                "timestamp({})".format(sentinel),
-                "timestamp({})".format(value),
+                f"timestamp({sentinel})",
+                f"timestamp({value})",
             ),
             "version": lambda sentinel, value: (
-                "version({})".format(sentinel),
-                "version({})".format(value),
+                f"version({sentinel})",
+                f"version({value})",
             ),
-            # expr -- seems to be used only in value_from clauses
-            # resource_count -- no examples; it's not clear how this is different from size()
         }
+
 
         if (
             isinstance(value, str)
@@ -230,27 +222,23 @@ class C7N_Rewriter:
         ):
             # Boolean cases
             # Rewrite == true, != true, == false, and != false
-            if op in ("eq", "equal"):
-                if value in ("true", True):
-                    return f"{key}"
-                else:
-                    return f"! {key}"
-            elif op in ("ne", "not-equal"):
-                if value in ("true", True):
-                    return f"! {key}"
-                else:
-                    return f"{key}"
+            if (
+                op in {"eq", "equal"}
+                and value in ("true", True)
+                or op not in ("eq", "equal")
+                and op in {"ne", "not-equal"}
+                and value not in ("true", True)
+            ):
+                return f"{key}"
+            elif op in {"eq", "equal", "ne", "not-equal"}:
+                return f"! {key}"
             else:
                 raise ValueError(f"Unknown op: {op}, value: {value} combination")
 
         else:
             # Ordinary comparisons, including the value_type transformation
             cel_value: str
-            if isinstance(value, str):
-                cel_value = C7N_Rewriter.q(value)
-            else:
-                cel_value = f"{value}"
-
+            cel_value = C7N_Rewriter.q(value) if isinstance(value, str) else f"{value}"
             if value_type:
                 type_transform = type_value_map[value_type]
                 cel_value, key = type_transform(cel_value, key)
@@ -327,12 +315,9 @@ class C7N_Rewriter:
             # if expr is a string, it's jmespath. Escape embedded apostrophes.
             # TODO: The C7N_Rewriter.q() function *should* handle this.
             expr_text = value_from["expr"].replace("'", "\\'")
-            if "{" in expr_text:
-                expr_text = f"subst('{expr_text}')"
-            else:
-                expr_text = f"'{expr_text}'"
+            expr_text = f"subst('{expr_text}')" if "{" in expr_text else f"'{expr_text}'"
             cel_value = f"{source}.jmes_path({expr_text})"
-            # TODO: if expr is an integer, we use ``.map(x, x[integer])``
+                # TODO: if expr is an integer, we use ``.map(x, x[integer])``
         else:
             cel_value = f"{source}"
 
@@ -367,14 +352,12 @@ class C7N_Rewriter:
 
         """
         if "key" not in operation:
-            # The {"tag:...": "absent"} case?
-            if len(operation.items()) == 1:
-                key = list(operation)[0]
-                value = operation[key]
-                operation = {"key": key, "value": value}
-            else:
+            if len(operation.items()) != 1:
                 raise ValueError(f"Missing key {operation}")  # pragma: no cover
 
+            key = list(operation)[0]
+            value = operation[key]
+            operation = {"key": key, "value": value}
         key = C7N_Rewriter.key_to_cel(operation["key"])
 
         if "value" in operation and "op" in operation:
@@ -383,7 +366,7 @@ class C7N_Rewriter:
                 key, operation["op"], operation["value"], operation.get("value_type")
             )
 
-        elif "value" in operation and "op" not in operation:
+        elif "value" in operation:
             # C7N has the following implementation...
             #         if r is None and v == 'absent':
             #             return True
@@ -644,18 +627,7 @@ class C7N_Rewriter:
         op = c7n_filter["op"]
         value = c7n_filter["value"]
         macro = C7N_Rewriter.atomic_op_map[op].format("m", f"{value}")
-        if "missing-value" in c7n_filter:
-            missing = c7n_filter["missing-value"]
-            return (
-                f"resource.get_metrics("
-                f'{{"MetricName": {C7N_Rewriter.q(name)}, '
-                f'"Statistic": {C7N_Rewriter.q(statistics)}, '
-                f'"StartTime": now - duration({start_d}), "EndTime": now, '
-                f'"Period": duration({period_d})}})'
-                f".map(m, m == null ? {missing} : m)"
-                f".exists(m, {macro})"
-            )
-        else:
+        if "missing-value" not in c7n_filter:
             return (
                 f"resource.get_metrics("
                 f'{{"MetricName": {C7N_Rewriter.q(name)}, '
@@ -664,6 +636,16 @@ class C7N_Rewriter:
                 f'"Period": duration({period_d})}})'
                 f".exists(m, {macro})"
             )
+        missing = c7n_filter["missing-value"]
+        return (
+            f"resource.get_metrics("
+            f'{{"MetricName": {C7N_Rewriter.q(name)}, '
+            f'"Statistic": {C7N_Rewriter.q(statistics)}, '
+            f'"StartTime": now - duration({start_d}), "EndTime": now, '
+            f'"Period": duration({period_d})}})'
+            f".map(m, m == null ? {missing} : m)"
+            f".exists(m, {macro})"
+        )
 
     @staticmethod
     def type_age_rewrite(resource: str, c7n_filter: Dict[str, Any]) -> str:
@@ -927,7 +909,7 @@ class C7N_Rewriter:
                 )
             )
 
-        if len(clauses) > 0:
+        if clauses:
             operator = " && " if set_op == "and" else " || "
             details = [f"({operator.join(clauses)})"]
         else:
@@ -1120,14 +1102,13 @@ class C7N_Rewriter:
                 c7n_filter["value"],
                 c7n_filter.get("value_type"),
             )
-        else:
-            key = c7n_prefix
-            return C7N_Rewriter.value_to_cel(
-                f'resource.{attr}.kms_key()[{C7N_Rewriter.q(key)}]',
-                c7n_filter.get("op", "equal"),
-                c7n_filter["value"],
-                c7n_filter.get("value_type"),
-            )
+        key = c7n_prefix
+        return C7N_Rewriter.value_to_cel(
+            f'resource.{attr}.kms_key()[{C7N_Rewriter.q(key)}]',
+            c7n_filter.get("op", "equal"),
+            c7n_filter["value"],
+            c7n_filter.get("value_type"),
+        )
 
     @staticmethod
     def onhour_rewrite(resource: str, c7n_filter: Dict[str, Any]) -> str:
@@ -1402,10 +1383,7 @@ class C7N_Rewriter:
                 '(resource["GroupId"] in all_scan_groups() && has(resource.VpcId)'),
         }
         attr = resource_type_map[resource]
-        if c7n_filter.get("value", True):
-            prefix = ""
-        else:
-            prefix = "! "
+        prefix = "" if c7n_filter.get("value", True) else "! "
         return f'{prefix}{attr}'
 
     @staticmethod

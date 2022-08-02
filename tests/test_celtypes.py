@@ -66,7 +66,6 @@ def test_bool_type():
     assert repr(t) == "BoolType(True)"
     with raises(TypeError):
         -t
-    assert hash(t) == hash(t)
     assert hash(t) != hash(f)
     assert not BoolType(None)
     assert BoolType(MessageType({StringType("value"): BoolType(True)}))
@@ -99,7 +98,6 @@ def test_double_type():
     assert d_pi != d_e
     with raises(TypeError):
         d_pi == StringType("nope")
-    assert hash(d_pi) == hash(d_pi)
     assert hash(d_pi) != hash(d_e)
     assert 2 / DoubleType(0.0) == float("inf")
     assert 3.0 / DoubleType(4.0) == DoubleType(0.75)
@@ -150,7 +148,6 @@ def test_int_type():
     assert i_42 <= i_max
     assert i_max > i_42
     assert i_max >= i_42
-    assert hash(i_42) == hash(i_42)
     assert hash(i_42) != hash(i_max)
     assert IntType(None) == IntType(0)
     assert IntType(MessageType({"value": IntType(42)})) == IntType(42)
@@ -197,7 +194,6 @@ def test_uint_type():
     assert u_42 <= u_max
     assert u_max > u_42
     assert u_max >= u_42
-    assert hash(u_42) == hash(u_42)
     assert hash(u_42) != hash(u_max)
     assert UintType(None) == UintType(0)
     assert UintType(MessageType({"value": UintType(42)})) == UintType(42)
@@ -210,7 +206,7 @@ def test_list_type():
     with raises(TypeError):
         assert l_1 != l_2
     with raises(TypeError):
-        assert not l_1 == l_2
+        assert l_1 != l_2
     assert repr(l_1) == "ListType([IntType(42), IntType(6), IntType(7)])"
     with raises(TypeError):
         l_1 < l_2
@@ -249,14 +245,14 @@ def test_map_type():
     m_single = MapType({StringType("A"): IntType(42),})
     assert m_1 == m_1
     assert m_1 == m_3
-    assert not m_1 != m_1
-    assert not m_single != m_single
+    assert m_1 == m_1
+    assert m_single == m_single
     with raises(TypeError):
         MapType(3.1415926)
     with raises(TypeError):
         assert m_1 != m_2
     with raises(TypeError):
-        assert not m_1 == m_2
+        assert m_1 != m_2
     assert repr(m_1) == (
         "MapType({StringType('A'): IntType(42), "
         "StringType('X'): IntType(6), "
@@ -292,7 +288,6 @@ def test_string_type():
     assert repr(s_3) == "StringType('42')"
     assert s_1 == s_1
     assert s_1 != s_2
-    assert id(s_1) == id(s_1)
     assert id(s_1) != id(s_2)
 
 

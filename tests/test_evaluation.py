@@ -95,8 +95,8 @@ def test_exception_eval_error():
     assert 1 // ex == ex
     assert 1 % ex == ex
     assert 1 ** ex == ex
-    assert not 1 == ex
-    assert not ex == 1
+    assert ex != 1
+    assert ex != 1
     assert ex() == ex
 
 
@@ -127,10 +127,7 @@ def test_boolean_decorator():
 
     @boolean
     def mock_operation(a, b):
-        if a == sentinel.not_implemented:
-            return NotImplemented
-        else:
-            return a
+        return NotImplemented if a == sentinel.not_implemented else a
 
     result_1 = mock_operation(True, sentinel.b)
     assert result_1 == celtypes.BoolType(True)
@@ -317,14 +314,9 @@ def test_activation_bad_dot_name_syntax():
 
 @fixture
 def mock_tree():
-    tree = Mock(
-        name='mock_tree',
-        data='ident',
-        children=[
-            Mock(value=sentinel.ident)
-        ]
+    return Mock(
+        name='mock_tree', data='ident', children=[Mock(value=sentinel.ident)]
     )
-    return tree
 
 def test_find_ident(mock_tree):
     fi = FindIdent.in_tree(mock_tree)
@@ -487,31 +479,30 @@ def test_eval_expr_1():
 
 @fixture
 def mock_expr_tree():
-    tree = lark.Tree(
+    return lark.Tree(
         data='expr',
         children=[
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_="BOOL_LIT", value="true"),
-                ]
+                ],
             ),
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_="INT_LIT", value="6"),
-                ]
+                ],
             ),
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_="INT_LIT", value="7"),
-                ]
+                ],
             ),
         ],
-        meta=Mock(line=1, column=1)
+        meta=Mock(line=1, column=1),
     )
-    return tree
 
 
 def test_eval_expr_3_good(mock_expr_tree):
@@ -551,18 +542,17 @@ def test_eval_expr_0():
 
 
 def binop_1_tree(data, lit_type, lit_value):
-    tree = lark.Tree(
+    return lark.Tree(
         data=data,
         children=[
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_=lit_type, value=lit_value),
-                ]
+                ],
             ),
-        ]
+        ],
     )
-    return tree
 
 
 def test_eval_conditionalor_1():
@@ -576,25 +566,24 @@ def test_eval_conditionalor_1():
 
 
 def binop_2_tree(data, lit_type, lit_value_1, lit_value_2):
-    tree = lark.Tree(
+    return lark.Tree(
         data=data,
         children=[
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_=lit_type, value=lit_value_1),
-                ]
+                ],
             ),
             lark.Tree(
                 data='literal',
                 children=[
                     lark.Token(type_=lit_type, value=lit_value_2),
-                ]
+                ],
             ),
         ],
-        meta=Mock(line=1, column=1)
+        meta=Mock(line=1, column=1),
     )
-    return tree
 
 def test_eval_conditionalor_2_good():
     tree = binop_2_tree("conditionalor", "BOOL_LIT", "false", "true")
@@ -620,12 +609,7 @@ def test_eval_conditionalor_2_bad_override():
         evaluator.evaluate()
 
 def binop_broken_tree(data):
-    tree = lark.Tree(
-        data=data,
-        children=[],
-        meta=Mock(line=1, column=1)
-    )
-    return tree
+    return lark.Tree(data=data, children=[], meta=Mock(line=1, column=1))
 
 def test_eval_conditionalor_0():
     tree = binop_broken_tree("conditionalor")
@@ -1479,7 +1463,7 @@ def test_build_reduce_macro_eval(monkeypatch):
 
 
 def macro_member_tree(macro_name, *args):
-    tree = lark.Tree(
+    return lark.Tree(
         data="member",
         children=[
             lark.Tree(
@@ -1489,30 +1473,33 @@ def macro_member_tree(macro_name, *args):
                         # monkeypatch to visit mocks member values
                         data="primary",
                         children=[
-                            lark.Tree("ident", children=[lark.Token("IDENT", "placeholder")])
-                        ]
+                            lark.Tree(
+                                "ident",
+                                children=[lark.Token("IDENT", "placeholder")],
+                            )
+                        ],
                     ),
                     lark.Token("IDENT", macro_name),
                     lark.Tree(
                         data="exprlist",
-                        children=(
-                            # Most macros are variable and expression
-                            # reduce is two variables and two expressions.
-                            [
-                                lark.Tree("ident", children=[lark.Token("IDENT", "variable")]),
-                                lark.Tree("expr", children=[lark.Token("INT", "0")])
-                            ]
-                            if not args else args
-                        ),
-                        meta=Mock(line=1)
+                        children=args
+                        or [
+                            lark.Tree(
+                                "ident",
+                                children=[lark.Token("IDENT", "variable")],
+                            ),
+                            lark.Tree(
+                                "expr", children=[lark.Token("INT", "0")]
+                            ),
+                        ],
+                        meta=Mock(line=1),
                     ),
                 ],
-                meta=Mock(line=1)
+                meta=Mock(line=1),
             )
         ],
-        meta=Mock(line=1)
+        meta=Mock(line=1),
     )
-    return tree
 
 def test_member_dot_arg_map(monkeypatch):
     """The map macro ["hello", "world"].map(x, x) == ["hello", "world"]"""
@@ -2334,22 +2321,16 @@ def test_primary_map_lit_empty():
 
 @fixture
 def map_init_tree():
-    tree = lark.Tree(
+    return lark.Tree(
         data="primary",
         children=[
             lark.Tree(
                 data="map_lit",
-                children=[
-                    lark.Tree(
-                        data="mapinits",
-                        children=[]
-                    )
-                ]
+                children=[lark.Tree(data="mapinits", children=[])],
             )
         ],
-        meta=Mock(line=1, column=1)
+        meta=Mock(line=1, column=1),
     )
-    return tree
 
 def test_primary_map_lit_nonempty_good(map_init_tree, monkeypatch):
     visit_children = Mock(return_value=[sentinel.map_instance])

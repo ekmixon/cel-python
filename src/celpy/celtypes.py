@@ -277,16 +277,10 @@ def logical_and(x: Value, y: Value) -> Value:
     """
     if not isinstance(x, BoolType) and not isinstance(y, BoolType):
         raise TypeError(f"{type(x)} {x!r} and {type(y)} {y!r}")
-    elif not isinstance(x, BoolType) and isinstance(y, BoolType):
-        if y:
-            return x  # whatever && true == whatever
-        else:
-            return y  # whatever && false == false
-    elif isinstance(x, BoolType) and not isinstance(y, BoolType):
-        if x:
-            return y  # true && whatever == whatever
-        else:
-            return x  # false && whatever == false
+    elif not isinstance(x, BoolType):
+        return x if y else y
+    elif not isinstance(y, BoolType):
+        return y if x else x
     else:
         return BoolType(cast(BoolType, x) and cast(BoolType, y))
 
@@ -325,16 +319,10 @@ def logical_or(x: Value, y: Value) -> Value:
     """
     if not isinstance(x, BoolType) and not isinstance(y, BoolType):
         raise TypeError(f"{type(x)} {x!r} or {type(y)} {y!r}")
-    elif not isinstance(x, BoolType) and isinstance(y, BoolType):
-        if y:
-            return y  # whatever || true == true
-        else:
-            return x  # whatever || false == whatever
-    elif isinstance(x, BoolType) and not isinstance(y, BoolType):
-        if x:
-            return x  # true || whatever == true
-        else:
-            return y  # false || whatever == whatever
+    elif not isinstance(x, BoolType):
+        return y or x
+    elif not isinstance(y, BoolType):
+        return x or y
     else:
         return BoolType(cast(BoolType, x) or cast(BoolType, y))
 
@@ -425,8 +413,7 @@ class DoubleType(float):
         return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __str__(self) -> str:
-        text = str(float(self))
-        return text
+        return str(float(self))
 
     def __neg__(self) -> 'DoubleType':
         return DoubleType(super().__neg__())
@@ -538,8 +525,7 @@ class IntType(int):
         return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __str__(self) -> str:
-        text = str(int(self))
-        return text
+        return str(int(self))
 
     @int64
     def __neg__(self) -> 'IntType':
@@ -706,8 +692,7 @@ class UintType(int):
         return f"{self.__class__.__name__}({super().__repr__()})"
 
     def __str__(self) -> str:
-        text = str(int(self))
-        return text
+        return str(int(self))
 
     def __neg__(self) -> NoReturn:
         raise TypeError("no such overload")
@@ -1101,16 +1086,12 @@ class TimestampType(datetime.datetime):
     def __add__(self, other: Any) -> 'TimestampType':
         """Timestamp + Duration -> Timestamp"""
         result = super().__add__(other)
-        if result == NotImplemented:
-            return NotImplemented
-        return TimestampType(result)
+        return NotImplemented if result == NotImplemented else TimestampType(result)
 
     def __radd__(self, other: Any) -> 'TimestampType':
         """Duration + Timestamp -> Timestamp"""
         result = super().__radd__(other)
-        if result == NotImplemented:
-            return NotImplemented
-        return TimestampType(result)
+        return NotImplemented if result == NotImplemented else TimestampType(result)
 
     # For more information, check the typeshed definition
     # https://github.com/python/typeshed/blob/master/stdlib/2and3/datetime.pyi
@@ -1142,7 +1123,7 @@ class TimestampType(datetime.datetime):
         ..  TODO: Permit an extension into the timezone lookup.
             Tweak ``celpy.celtypes.TimestampType.TZ_ALIASES``.
         """
-        tz_lookup = str(tz_name)
+        tz_lookup = tz_name
         if tz_lookup in cls.TZ_ALIASES:
             tz = dateutil.tz.gettz(cls.TZ_ALIASES[tz_lookup])
         else:
@@ -1158,18 +1139,16 @@ class TimestampType(datetime.datetime):
         sign, hh, mm = tz_match.groups()
         offset_min = (int(hh) * 60 + int(mm)) * (-1 if sign == '-' else +1)
         offset = datetime.timedelta(seconds=offset_min * 60)
-        tz = datetime.timezone(offset)
-        return tz
+        return datetime.timezone(offset)
 
     @staticmethod
     def tz_parse(tz_name: Optional[str]) -> Optional[datetime.tzinfo]:
-        if tz_name:
-            tz = TimestampType.tz_name_lookup(tz_name)
-            if tz is None:
-                tz = TimestampType.tz_offset_parse(tz_name)
-            return tz
-        else:
+        if not tz_name:
             return dateutil.tz.UTC
+        tz = TimestampType.tz_name_lookup(tz_name)
+        if tz is None:
+            tz = TimestampType.tz_offset_parse(tz_name)
+        return tz
 
     def getDate(self, tz_name: Optional[StringType] = None) -> IntType:
         new_tz = self.tz_parse(tz_name)

@@ -701,50 +701,45 @@ class NameContainer(Dict[str, Referent]):
         :param path: names to follow into the structure.
         :returns: Value found down inside the structure.
         """
-        if path:
-            head, *tail = path
-            try:
-                return NameContainer.dict_find_name(
-                    cast(Dict[str, Referent], some_dict[head]),
-                    tail)
-            except KeyError:
-                NameContainer.logger.debug(f"{head!r} not found in {some_dict.keys()}")
-                raise NameContainer.NotFound(path)
-        else:
+        if not path:
             return cast(Result, some_dict)
+        head, *tail = path
+        try:
+            return NameContainer.dict_find_name(
+                cast(Dict[str, Referent], some_dict[head]),
+                tail)
+        except KeyError:
+            NameContainer.logger.debug(f"{head!r} not found in {some_dict.keys()}")
+            raise NameContainer.NotFound(path)
 
     def find_name(self, path: List[str]) -> Union["NameContainer", Result]:
         """
         Find the name by searching down through nested packages or raise NotFound.
         This is a kind of in-order tree walk of contained packages.
         """
-        if path:
-            head, *tail = path
-            try:
-                sub_context = self[head].value
-            except KeyError:
-                self.logger.debug(f"{head!r} not found in {self.keys()}")
-                raise NameContainer.NotFound(path)
-            if isinstance(sub_context, NameContainer):
-                return sub_context.find_name(tail)
-            elif isinstance(
+        if not path:
+            # Fully matched. This NameContainer is what we were looking for.
+            return self
+        head, *tail = path
+        try:
+            sub_context = self[head].value
+        except KeyError:
+            self.logger.debug(f"{head!r} not found in {self.keys()}")
+            raise NameContainer.NotFound(path)
+        if isinstance(sub_context, NameContainer):
+            return sub_context.find_name(tail)
+        elif isinstance(
                     sub_context,
                     (celpy.celtypes.MessageType, celpy.celtypes.MapType,
                      celpy.celtypes.PackageType, dict)
             ):
-                # Out of defined NameContainers, moving into Values: Messages, Mappings or Packages
-                # Make a fake Referent return value.
-                item: Union["NameContainer", Result] = NameContainer.dict_find_name(
-                    cast(Dict[str, Referent], sub_context),
-                    tail
-                )
-                return item
-            else:
-                # Fully matched. No more Referents with NameContainers or Referents with Mappings.
-                return cast(NameContainer, sub_context)
+            return NameContainer.dict_find_name(
+                cast(Dict[str, Referent], sub_context), tail
+            )
+
         else:
-            # Fully matched. This NameContainer is what we were looking for.
-            return self
+            # Fully matched. No more Referents with NameContainers or Referents with Mappings.
+            return cast(NameContainer, sub_context)
 
     def parent_iter(self) -> Iterator['NameContainer']:
         """Yield this NameContainer and all of its parents to create a flat list."""
@@ -793,10 +788,7 @@ class NameContainer(Dict[str, Referent]):
             f"resolve_name({package!r}.{name!r}) in {self.keys()}, parent={self.parent}"
         )
         # Longest Name
-        if package:
-            target = self.ident_pat.findall(package) + [""]
-        else:
-            target = [""]
+        target = self.ident_pat.findall(package) + [""] if package else [""]
         # Pool of matches
         matches: List[Tuple[List[str], Union["NameContainer", Result]]] = []
         # Target has an extra item to make the len non-zero.
@@ -961,13 +953,9 @@ class Activation:
         :param vars: Variables with literals to be converted to the desired types.
         :return: An ``Activation`` that chains to this Activation.
         """
-        new = Activation(
-            annotations=annotations,
-            vars=vars,
-            parent=self,
-            package=self.package
+        return Activation(
+            annotations=annotations, vars=vars, parent=self, package=self.package
         )
-        return new
 
     def resolve_variable(self, name: str) -> Union[Result, NameContainer]:
         """Find the object referred to by the name.
@@ -978,7 +966,7 @@ class Activation:
         container.  Most of the time, we want the `value` attribute of the Referent.
         This can be a Result (a Union[Value, CelType])
         """
-        container_or_value = self.identifiers.resolve_name(self.package, str(name))
+        container_or_value = self.identifiers.resolve_name(self.package, name)
         return cast(Union[Result, NameContainer], container_or_value)
 
     def __repr__(self) -> str:
@@ -1930,7 +1918,7 @@ class Evaluator(lark.visitors.Interpreter[Result]):
             # Is there exactly 1?
             member_list = cast(celpy.celtypes.ListType, self.visit(member_tree))
             sub_expr = self.build_macro_eval(tree)
-            count = sum(1 for value in member_list if bool(sub_expr(value)))
+            count = sum(bool(sub_expr(value)) for value in member_list)
             return celpy.celtypes.BoolType(count == 1)
 
         elif method_name_token.value == "reduce":
@@ -1963,15 +1951,14 @@ class Evaluator(lark.visitors.Interpreter[Result]):
                     Tuple[Result, lark.Token],
                     self.visit_children(tree)
                 )
-                result = self.method_eval(member, ident)
+                return self.method_eval(member, ident)
             else:
                 # assert len(tree.children) == 3
                 member, ident, expr_iter = cast(
                     Tuple[Result, lark.Token, Iterable[Result]],
                     self.visit_children(tree)
                 )
-                result = self.method_eval(member, ident, expr_iter)
-            return result
+                return self.method_eval(member, ident, expr_iter)
 
     @trace
     def member_index(self, tree: lark.Tree) -> Result:
@@ -2120,13 +2107,10 @@ class Evaluator(lark.visitors.Interpreter[Result]):
             if len(child.children) == 0:
                 # Empty list
                 # TODO: Refactor into type_eval()
-                result = celpy.celtypes.ListType()
-            else:
-                # exprlist to be packaged as List.
-                values = self.visit_children(child)
-                result = values[0]
-            return result
-
+                return celpy.celtypes.ListType()
+            # exprlist to be packaged as List.
+            values = self.visit_children(child)
+            return values[0]
         elif child.data == "map_lit":
             if len(child.children) == 0:
                 # Empty mapping
@@ -2140,9 +2124,7 @@ class Evaluator(lark.visitors.Interpreter[Result]):
                 try:
                     values = self.visit_children(child)
                     result = values[0]
-                except ValueError as ex:
-                    result = CELEvalError(ex.args[0], ex.__class__, ex.args, tree=tree)
-                except TypeError as ex:
+                except (ValueError, TypeError) as ex:
                     result = CELEvalError(ex.args[0], ex.__class__, ex.args, tree=tree)
             return result
 
@@ -2237,7 +2219,7 @@ class Evaluator(lark.visitors.Interpreter[Result]):
             elif value_token.type == "INT_LIT":
                 result = celpy.celtypes.IntType(value_token.value)
             elif value_token.type == "UINT_LIT":
-                if not value_token.value[-1].lower() == 'u':
+                if value_token.value[-1].lower() != 'u':
                     raise CELSyntaxError(
                         f"invalid unsigned int literal {value_token!r}",
                         line=tree.meta.line,
@@ -2276,9 +2258,7 @@ class Evaluator(lark.visitors.Interpreter[Result]):
             return next(errors)
         except StopIteration:
             pass
-        # There are no CELEvalError values in the result, so we can narrow the domain.
-        result = celpy.celtypes.ListType(cast(List[celpy.celtypes.Value], values))
-        return result
+        return celpy.celtypes.ListType(cast(List[celpy.celtypes.Value], values))
 
     @trace
     def fieldinits(self, tree: lark.Tree) -> Result:
@@ -2294,8 +2274,9 @@ class Evaluator(lark.visitors.Interpreter[Result]):
         fields: Dict[str, Any] = {}
         pairs = cast(
             Iterable[Tuple[lark.Token, lark.Tree]],
-            zip(tree.children[0::2], tree.children[1::2])
+            zip(tree.children[::2], tree.children[1::2]),
         )
+
         for ident_node, expr_node in pairs:
             ident = ident_node.value
             expr = cast(celpy.celtypes.Value, self.visit_children(expr_node)[0])
@@ -2321,7 +2302,7 @@ class Evaluator(lark.visitors.Interpreter[Result]):
         # Not sure if this cast is sensible. Should a CELEvalError propagate up from the
         # sub-expressions? See the error check in :py:func:`exprlist`.
         keys_values = cast(List[celpy.celtypes.Value], self.visit_children(tree))
-        pairs = zip(keys_values[0::2], keys_values[1::2])
+        pairs = zip(keys_values[::2], keys_values[1::2])
         for key, value in pairs:
             if key in result:
                 raise ValueError(f"Duplicate key {key!r}")
@@ -2371,15 +2352,10 @@ def celstr(token: lark.Token) -> celpy.celtypes.StringType:
     text = token.value
     if text[:1] in ("R", "r"):
         # Raw; ignore ``\`` escapes
-        if text[1:4] == '"""' or text[1:4] == "'''":
-            # Long
-            expanded = text[4:-3]
-        else:
-            # Short
-            expanded = text[2:-1]
+        expanded = text[4:-3] if text[1:4] in ['"""', "'''"] else text[2:-1]
     else:
         # Cooked; expand ``\`` escapes
-        if text[0:3] == '"""' or text[0:3] == "'''":
+        if text[:3] in ['"""', "'''"]:
             # Long
             match_iter = CEL_ESCAPES_PAT.finditer(text[3:-3])
         else:
@@ -2414,7 +2390,7 @@ def celbytes(token: lark.Token) -> celpy.celtypes.BytesType:
     text = token.value
     if text[:2].lower() == "br":
         # Raw; ignore ``\`` escapes
-        if text[2:5] == '"""' or text[2:5] == "'''":
+        if text[2:5] in ['"""', "'''"]:
             # Long
             expanded = celpy.celtypes.BytesType(ord(c) for c in text[5:-3])
         else:
@@ -2422,7 +2398,7 @@ def celbytes(token: lark.Token) -> celpy.celtypes.BytesType:
             expanded = celpy.celtypes.BytesType(ord(c) for c in text[3:-1])
     elif text[:1].lower() == "b":
         # Cooked; expand ``\`` escapes
-        if text[1:4] == '"""' or text[1:4] == "'''":
+        if text[1:4] in ['"""', "'''"]:
             # Long
             match_iter = CEL_ESCAPES_PAT.finditer(text[4:-3])
         else:

@@ -292,19 +292,17 @@ def str_detokenize(token: Token) -> str:
     'flambé'
     """
 
-    if token.type == "STRING":
-        # Dequote the value, then expand escapes.
-        if token.value.startswith('"') and token.value.endswith('"'):
-            text = token.value[1:-1]
-        elif token.value.startswith("'") and token.value.endswith("'"):
-            text = token.value[1:-1]
-        else:
-            text = token.value
-        match_iter = STR_ESCAPES.finditer(text)
-        expanded = ''.join(expand_str_escape(m.group()) for m in match_iter)
-        return expanded
-    else:
+    if token.type != "STRING":
         raise ValueError(f"Unexpected token {token!r}")
+    # Dequote the value, then expand escapes.
+    if token.value.startswith('"') and token.value.endswith('"'):
+        text = token.value[1:-1]
+    elif token.value.startswith("'") and token.value.endswith("'"):
+        text = token.value[1:-1]
+    else:
+        text = token.value
+    match_iter = STR_ESCAPES.finditer(text)
+    return ''.join(expand_str_escape(m.group()) for m in match_iter)
 
 def bytes_detokenize(token: Token) -> bytes:
     """
@@ -339,11 +337,11 @@ class Primitive(NamedTuple):
     @property
     def type_names(self) -> Set[str]:
         """Transitive closure of all contained types."""
-        return set([self.type_name.value])
+        return {self.type_name.value}
 
     @property
     def all_items(self) -> Set["Primitive"]:
-        return set([self])
+        return {self}
 
     @property
     def value(self) -> Any:
@@ -377,7 +375,7 @@ class Structure(NamedTuple):
     @property
     def type_names(self) -> Set[str]:
         """Transitive closure of all contained types."""
-        return set([self.type_name.value]).union(*(i.type_names for i in self.items))
+        return {self.type_name.value}.union(*(i.type_names for i in self.items))
 
     @property
     def all_items(self) -> Set["Structure"]:  # Set[Union["Primitive", "Structure"]]
@@ -408,7 +406,7 @@ def parse_serialized_value(tokens: Tokens) -> ParseTree:
     if lookahead.type == "PUNCTUATION" and lookahead.value == "{":
         items = []
         lookahead = next(tokens)
-        while not (lookahead.type == "PUNCTUATION" and lookahead.value == "}"):
+        while lookahead.type != "PUNCTUATION" or lookahead.value != "}":
             back(tokens)
             items.append(parse_serialized_value(tokens))
             lookahead = next(tokens)
@@ -516,17 +514,17 @@ class TestAllTypes:
 
 class NestedMessage:
     def __repr__(self):
-        return f"NestedMessage()"
+        return "NestedMessage()"
 
 
 def debug_call_stack() -> None:
     """Expose the call stack in the log, this can help debug builders with unexpected state."""
     for context_frame_line in traceback.format_stack():
-        if 'site-packages' in context_frame_line:
+        if (
+            'site-packages' in context_frame_line
+            or 'debug_call_stack' in context_frame_line
+        ):
             # Skip standard library and installed packages
-            continue
-        elif 'debug_call_stack' in context_frame_line:
-            # Skip this function.
             continue
         logger.debug(f"    {context_frame_line.rstrip()}")
 
@@ -734,10 +732,9 @@ def object_builder(*items: ParseTree) -> CelType:
                 # All values? We have a list.
                 if item_kind == {"values"}:
                     value = ListType([structure_builder(i) for i in field.items])
-                # All fields? We have a mapping.
                 elif item_kind == {"fields"}:
                     pairs = [structure_builder(i) for i in field.items]
-                    subfields = {k: v for k, v in pairs}
+                    subfields = dict(pairs)
                     value = MapType(subfields)
                 else:
                     raise ValueError(f"Mixed item kinds {item_kind!r} in object_builder({items!r})")
@@ -905,19 +902,19 @@ def celify(source_path: Path, target_path: Optional[Path]) -> None:
                 print(f'   Given type_env parameter "{variable}" is {replacement}')
             elif then_value_line:
                 # Replace the value with a proper CEL object
-                value = then_value_line.group(1)
+                value = then_value_line[1]
                 replacement = structure_builder(parse_serialized_value(Tokens(value)))
                 print(f'    #    {value}')
                 print(f'    Then value is {replacement!r}')
             elif then_error_line:
                 # Replace the error with a more useful CEL-like.
-                value = then_error_line.group(1)
+                value = then_error_line[1]
                 replacement_exception = structure_builder(parse_serialized_value(Tokens(value)))
                 print(f'    #    {value}')
                 print(f'    Then eval_error is {replacement_exception.args[0]!r}')
             elif when_expr_line:
                 # Clean up escaped quotes within the CEL expr.
-                value = when_expr_line.group(1)
+                value = when_expr_line[1]
                 replacement = ''.join(
                     expand_str_escape(m.group()) for m in STR_ESCAPES.finditer(value))
                 if '"' in replacement:
@@ -960,8 +957,7 @@ def get_options(argv: List[str] = sys.argv[1:]) -> argparse.Namespace:
         'source', action='store', nargs='?', type=Path,
         help=".textproto file to convert"
     )
-    options = parser.parse_args(argv)
-    return options
+    return parser.parse_args(argv)
 
 
 if __name__ == "__main__":

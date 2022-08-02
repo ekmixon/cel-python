@@ -243,7 +243,7 @@ def evaluate(context):
         "resource": celpy.celtypes.MapType,
         "now": celpy.celtypes.TimestampType,
     }
-    decls.update(celpy.c7nlib.DECLARATIONS)
+    decls |= celpy.c7nlib.DECLARATIONS
     context.cel['env'] = celpy.Environment(
         annotations=decls,
         runner_class=celpy.c7nlib.C7N_Interpreted_Runner

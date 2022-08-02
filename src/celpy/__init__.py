@@ -162,8 +162,7 @@ class InterpretedRunner(Runner):
             activation=self.new_activation(context),
             functions=self.functions
         )
-        value = e.evaluate()
-        return value
+        return e.evaluate()
 
 
 class CompiledRunner(Runner):
@@ -273,8 +272,7 @@ class Environment:
 
     def compile(self, text: str) -> Expression:
         """Compile the CEL source. This can raise syntax error exceptions."""
-        ast = self.cel_parser.parse(text)
-        return ast
+        return self.cel_parser.parse(text)
 
     def program(
             self,
@@ -289,5 +287,4 @@ class Environment:
 
     def activation(self) -> Activation:
         """Returns a base activation"""
-        activation = Activation(package=self.package, annotations=self.annotations)
-        return activation
+        return Activation(package=self.package, annotations=self.annotations)

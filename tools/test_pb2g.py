@@ -64,7 +64,13 @@ def test_given_bindings():
         'value:{map_value:{entries:{key:{string_value:"c"} value:{string_value:"d"}} entries:{key:{string_value:"a"} value:{string_value:"b"}}}}'))) == MapType(
         {StringType(source='c'): StringType(source='d'),
                StringType(source='a'): StringType(source='b')})
-    assert structure_builder(parse_serialized_value(Tokens('value:{null_value:NULL_VALUE}'))) == None
+    assert (
+        structure_builder(
+            parse_serialized_value(Tokens('value:{null_value:NULL_VALUE}'))
+        )
+        is None
+    )
+
     assert structure_builder(parse_serialized_value(
         Tokens('value:{list_value:{values:{int64_value:2} values:{int64_value:1}}}'))) == ListType(
         [IntType(source=2), IntType(source=1)])
@@ -106,8 +112,17 @@ def test_given_bindings():
     assert structure_builder(parse_serialized_value(Tokens(
         'value:{object_value:{[type.googleapis.com/google.protobuf.Struct]:{fields:{key:"first" value:{string_value:"Abraham"}} fields:{key:"last" value:{string_value:"Lincoln"}}}}}'))) == MessageType(
         {'first': StringType(source='Abraham'), 'last': StringType(source='Lincoln')})
-    assert structure_builder(parse_serialized_value(Tokens(
-        'value:{object_value:{[type.googleapis.com/google.protobuf.Value]:{null_value:NULL_VALUE}}}'))) == None
+    assert (
+        structure_builder(
+            parse_serialized_value(
+                Tokens(
+                    'value:{object_value:{[type.googleapis.com/google.protobuf.Value]:{null_value:NULL_VALUE}}}'
+                )
+            )
+        )
+        is None
+    )
+
     assert structure_builder(parse_serialized_value(Tokens(
         'value:{object_value:{[type.googleapis.com/google.protobuf.Value]:{number_value:-26.375}}}'))) == DoubleType(
         source=-26.375)

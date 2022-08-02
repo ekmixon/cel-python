@@ -478,8 +478,7 @@ def parse_cidr(value):  # type: ignore[no-untyped-def]
 
 def size_parse_cidr(value: celtypes.StringType,) -> Optional[celtypes.IntType]:
     """CIDR prefixlen value"""
-    cidr = parse_cidr(value)  # type: ignore[no-untyped-call]
-    if cidr:
+    if cidr := parse_cidr(value):
         return celtypes.IntType(cidr.prefixlen)
     else:
         return None
@@ -662,12 +661,7 @@ def image(resource: celtypes.MapType) -> celtypes.Value:
         We want to have the image details in the new :py:class:`CELFilter` instance.
     """
 
-    # Assuming the :py:class:`CELFilter` class has this method extracted from the legacy filter.
-    # Requies the policy already did this: C7N.filter.prefetch_instance_images([resource]) to
-    # populate cache.
-    image = C7N.filter.get_instance_image(resource)
-
-    if image:
+    if image := C7N.filter.get_instance_image(resource):
         creation_date = image["CreationDate"]
         image_name = image["Name"]
     else:
@@ -824,14 +818,18 @@ def get_health_events(
     }
     m = C7N.filter.manager
     service = phd_svc_name_map.get(m.data['resource'], m.get_model().service.upper())
-    raw_events = get_raw_health_events(cast(celtypes.MapType, json_to_cel(
-        {
-            "services": [service],
-            "regions": [m.config.region, 'global'],
-            "eventStatusCodes": statuses,
-        }
-    )))
-    return raw_events
+    return get_raw_health_events(
+        cast(
+            celtypes.MapType,
+            json_to_cel(
+                {
+                    "services": [service],
+                    "regions": [m.config.region, 'global'],
+                    "eventStatusCodes": statuses,
+                }
+            ),
+        )
+    )
 
 
 def get_related_ids(resource: celtypes.MapType,) -> celtypes.Value:
@@ -1307,9 +1305,12 @@ def all_launch_configuration_names() -> celtypes.Value:
     See :py:class:`c7n.resources.asg.UnusedLaunchConfig`
     """
     asgs = C7N.filter.manager.get_resource_manager('asg').resources()
-    used = set([
+    used = {
         a.get('LaunchConfigurationName', a['AutoScalingGroupName'])
-        for a in asgs if not a.get('LaunchTemplate')])
+        for a in asgs
+        if not a.get('LaunchTemplate')
+    }
+
     return json_to_cel(list(used))
 
 
@@ -1338,9 +1339,7 @@ def all_dbsubenet_groups() -> celtypes.Value:
     See :py:class:`c7n.resources.rds.UnusedRDSSubnetGroup`
     """
     rds = C7N.filter.manager.get_resource_manager('rds').resources()
-    used = set([
-        r.get('DBSubnetGroupName', r['DBInstanceIdentifier'])
-        for r in rds])
+    used = {r.get('DBSubnetGroupName', r['DBInstanceIdentifier']) for r in rds}
     return json_to_cel(list(used))
 
 
@@ -1388,10 +1387,10 @@ def get_load_balancer(resource: celtypes.MapType) -> celtypes.Value:
         LoadBalancerArn=resource['LoadBalancerArn'])
     print(results)
     return json_to_cel(
-        dict(
-            (item["Key"], parse_attribute_value(item["Value"]))
+        {
+            item["Key"]: parse_attribute_value(item["Value"])
             for item in results['Attributes']
-        )
+        }
     )
 
 

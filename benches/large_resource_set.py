@@ -158,7 +158,7 @@ class TagAssetPolicy(PolicyCase):
 class Mock_EC2:
     """Generator for synthetic EC2 resources."""
     def generate(self, n: Optional[int] = 1000) -> Iterable[JSON]:
-        for i in range(n):
+        for _ in range(n):
             yield {
                 "IamInstanceProfile": {
                     "Arn": random.choice(["prefix-Enterprise-Reserved-CloudCustodian", "other"]),
@@ -308,7 +308,7 @@ class Benchmark:
         self.results: Counter[celpy.celtypes.Value] = collections.Counter()
 
         decls = {"resource": celpy.celtypes.MapType}
-        decls.update(celpy.c7nlib.DECLARATIONS)
+        decls |= celpy.c7nlib.DECLARATIONS
         cel_env = celpy.Environment(annotations=decls)
         ast = cel_env.compile(self.example.filter_expr)
         program = cel_env.program(ast, functions=celpy.c7nlib.FUNCTIONS)

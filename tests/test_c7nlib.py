@@ -77,7 +77,10 @@ def test_parse_cidr():
     assert celpy.c7nlib.parse_cidr("192.168.100.0") in celpy.c7nlib.parse_cidr("192.168.100.0/22")
     assert celpy.c7nlib.parse_cidr("192.168.100.0").packed == bytes([192, 168, 100, 0])
     assert celpy.c7nlib.parse_cidr("localhost") is None
-    assert not celpy.c7nlib.parse_cidr("localhost") in celpy.c7nlib.parse_cidr("192.168.100.0/22")
+    assert celpy.c7nlib.parse_cidr("localhost") not in celpy.c7nlib.parse_cidr(
+        "192.168.100.0/22"
+    )
+
     assert (
         celpy.c7nlib.parse_cidr("192.168.100.0/22") in celpy.c7nlib.parse_cidr("192.168.100.0/22")
     )
@@ -92,7 +95,7 @@ def test_version():
     assert celpy.c7nlib.version("2.7.18") < celpy.c7nlib.version("2.8")
     assert celpy.c7nlib.version("2.6") < celpy.c7nlib.version("2.7.18")
     assert celpy.c7nlib.version("2.7") == celpy.c7nlib.version("2.7")
-    assert not (celpy.c7nlib.version("2.7") == ">=2.6")
+    assert celpy.c7nlib.version("2.7") != ">=2.6"
 
 
 value_from_examples = [
@@ -508,14 +511,12 @@ def celfilter_instance():
                 raise NotImplementedError(f"No get_related() for {resources}")
         return result
 
-    # Class foundation from C7n.
     class Filter:
         """Mock of c7n.filters.core.Filter"""
         def __init__(self, data, manager):
             self.data = data
             self.manager = manager
 
-    # Mixins from C7N.
     class InstanceImageMixin:
         get_instance_image = Mock(
             return_value={"CreationDate": "2020-09-10T11:12:13Z", "Name": str(sentinel.name)}
@@ -549,13 +550,19 @@ def celfilter_instance():
         get_endpoints = Mock(return_value=[str(sentinel.endpoint)])
         get_protocols = Mock(return_value=[str(sentinel.protocol)])
 
+
+
     class ImagesUnusedMixin:
-        _pull_ec2_images = Mock(return_value=set([str(sentinel.ec2_image_id)]))
+        _pull_ec2_images = Mock(return_value={str(sentinel.ec2_image_id)})
         _pull_asg_images = Mock(return_value=set())
 
+
+
+
     class SnapshotUnusedMixin:
-        _pull_asg_snapshots = Mock(return_value=set([str(sentinel.asg_snapshot_id)]))
+        _pull_asg_snapshots = Mock(return_value={str(sentinel.asg_snapshot_id)})
         _pull_ami_snapshots = Mock(return_value=set())
+
 
     class IamRoleUsageMixin:
         service_role_usage = Mock(return_value=[str(sentinel.iam_role)])
@@ -967,7 +974,7 @@ def test_C7N_interpreted_runner(celfilter_instance):
         "resource": celpy.celtypes.MapType,
         "now": celpy.celtypes.TimestampType,
     }
-    decls.update(celpy.c7nlib.DECLARATIONS)
+    decls |= celpy.c7nlib.DECLARATIONS
     cel_env = celpy.Environment(annotations=decls, runner_class=celpy.c7nlib.C7N_Interpreted_Runner)
     cel_ast = cel_env.compile(mock_filter.expr)
 

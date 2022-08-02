@@ -55,7 +55,7 @@ class CELJSONEncoder(json.JSONEncoder):
         beast that's not quite a :py:class:`celtypes.Value` because a few things have been replaced.
         """
         if isinstance(cel_object, celtypes.BoolType):
-            return True if cel_object else False
+            return bool(cel_object)
         elif isinstance(cel_object, celtypes.ListType):
             return [CELJSONEncoder.to_python(item) for item in cel_object]
         elif isinstance(cel_object, celtypes.MapType):
@@ -73,9 +73,7 @@ class CELJSONEncoder(json.JSONEncoder):
         return super().encode(CELJSONEncoder.to_python(cel_object))
 
     def default(self, cel_object: celtypes.Value) -> JSON:
-        if isinstance(cel_object, celtypes.TimestampType):
-            return str(cel_object)
-        elif isinstance(cel_object, celtypes.DurationType):
+        if isinstance(cel_object, (celtypes.TimestampType, celtypes.DurationType)):
             return str(cel_object)
         elif isinstance(cel_object, celtypes.BytesType):
             return base64.b64encode(cel_object).decode("ASCII")

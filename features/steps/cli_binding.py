@@ -39,11 +39,7 @@ def step_impl(context, arguments):
         environment = {"PYTHONPATH": context.config.userdata["PYTHONPATH"]}
     else:
         environment = {}
-    if sys.version_info.minor <= 6:
-        extra = {}
-    else:
-        extra = {'text': True}
-
+    extra = {} if sys.version_info.minor <= 6 else {'text': True}
     context.data['arguments'] = shlex.split(arguments)
 
     env = context.config.userdata['env']
@@ -89,11 +85,7 @@ def step_impl(context, arguments):
         environment = {"PYTHONPATH": context.config.userdata["PYTHONPATH"]}
     else:
         environment = {}
-    if sys.version_info.minor <= 6:
-        extra = {}
-    else:
-        extra = {'text': True}
-
+    extra = {} if sys.version_info.minor <= 6 else {'text': True}
     context.data['arguments'] = shlex.split(arguments)
 
     result = subprocess.run(
